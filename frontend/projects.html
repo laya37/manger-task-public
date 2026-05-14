@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Projects - Task Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand">📋 Task Manager</div>
+  <div class="nav-links">
+    <span id="user-greeting"></span>
+    <span id="user-role-badge" class="badge"></span>
+    <button class="btn-outline" onclick="window.location.href='dashboard.html'">Dashboard</button>
+    <button class="btn-outline" onclick="window.location.href='tasks.html'">Tasks</button>
+    <button class="btn-danger" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <h2>📁 Projects</h2>
+    <!-- Only admins see the Create Project button -->
+    <button class="btn-primary" id="create-project-btn" onclick="showCreateModal()" style="display:none">
+      + Create Project
+    </button>
+  </div>
+
+  <!-- Projects list -->
+  <div id="projects-list" class="projects-grid">
+    <p>Loading projects...</p>
+  </div>
+</div>
+
+<!-- CREATE PROJECT MODAL (popup) -->
+<div id="create-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>Create New Project</h3>
+    <div class="form-group">
+      <label>Project Name</label>
+      <input type="text" id="project-name" placeholder="Enter project name" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="project-desc" placeholder="What is this project about?"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="createProject()">Create</button>
+      <button class="btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+    <div id="project-message" class="message" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+  const API_URL = 'http://localhost:5000/api';
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  if (!token) window.location.href = 'index.html';
+
+  document.getElementById('user-greeting').textContent = `Hello, ${user.name}!`;
+  const badge = document.getElementById('user-role-badge');
+  badge.textContent = user.role;
+  badge.className = `badge ${user.role}`;
+
+  // Show create button only for admins
+  if (user.role === 'admin') {
+    document.getElementById('create-project-btn').style.display = 'block';
+  }
+
+  // Helper for API calls
+  async function apiCall(url, method = 'GET', body = null) {
+    const options = {
+      method,
+      headers: { 'Authorization': token, 'Content-Type': 'application/json' }
+    };
+    if (body) options.body = JSON.stringify(body);
+    const res = await fetch(`${API_URL}${url}`, options);
+    return res.json();
+  }
+
+  // Load all projects
+  async function loadProjects() {
+    const projects = await apiCall('/projects');
+    const container = document.getElementById('projects-list');
+
+    if (!projects.length) {
+      container.innerHTML = '<p>No projects found. Ask an admin to create one!</p>';
+      return;
+    }
+
+    container.innerHTML = projects.map(p => `
+      <div class="project-card">
+        <h3>${p.name}</h3>
+        <p>${p.description || 'No description'}</p>
+        <div class="project-meta">
+          <span>👥 ${p.member_count} members</span>
+          <span>✅ ${p.task_count} tasks</span>
+          <span>Created by ${p.creator_name}</span>
+        </div>
+        <div class="project-actions">
+          <button class="btn-outline" onclick="window.location.href='tasks.html?project=${p.id}'">
+            View Tasks
+          </button>
+          ${user.role === 'admin' ? `
+            <button class="btn-outline" onclick="deleteProject(${p.id})">Delete</button>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Create a project
+  async function createProject() {
+    const name = document.getElementById('project-name').value;
+    const description = document.getElementById('project-desc').value;
+
+    if (!name) {
+      showMsg('Project name is required.', true);
+      return;
+    }
+
+    const data = await apiCall('/projects', 'POST', { name, description });
+    if (data.project) {
+      closeModal();
+      loadProjects();
+    } else {
+      showMsg(data.message, true);
+    }
+  }
+
+  // Delete a project
+  async function deleteProject(id) {
+    if (!confirm('Delete this project and all its tasks?')) return;
+    await apiCall(`/projects/${id}`, 'DELETE');
+    loadProjects();
+  }
+
+  function showCreateModal() {
+    document.getElementById('create-modal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('create-modal').style.display = 'none';
+    document.getElementById('project-name').value = '';
+    document.getElementById('project-desc').value = '';
+  }
+
+  function showMsg(text, isError = false) {
+    const msg = document.getElementById('project-message');
+    msg.textContent = text;
+    msg.className = 'message ' + (isError ? 'error' : 'success');
+    msg.style.display = 'block';
+  }
+
+  function logout() {
+    localStorage.clear();
+    window.location.href = 'index.html';
+  }
+
+  loadProjects();
+</script>
+
+</body>
+</html>

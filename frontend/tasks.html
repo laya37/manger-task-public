@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tasks - Task Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand">📋 Task Manager</div>
+  <div class="nav-links">
+    <span id="user-greeting"></span>
+    <span id="user-role-badge" class="badge"></span>
+    <button class="btn-outline" onclick="window.location.href='dashboard.html'">Dashboard</button>
+    <button class="btn-outline" onclick="window.location.href='projects.html'">Projects</button>
+    <button class="btn-danger" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <h2>✅ Tasks</h2>
+    <button class="btn-primary" id="create-task-btn" onclick="showCreateModal()" style="display:none">
+      + Create Task
+    </button>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <select id="filter-status" onchange="filterTasks()">
+      <option value="">All Status</option>
+      <option value="todo">To Do</option>
+      <option value="in_progress">In Progress</option>
+      <option value="done">Done</option>
+    </select>
+  </div>
+
+  <!-- Tasks Table -->
+  <div class="card">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Task Name</th>
+          <th>Project</th>
+          <th>Assigned To</th>
+          <th>Priority</th>
+          <th>Status</th>
+          <th>Due Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tasks-tbody">
+        <tr><td colspan="7">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- CREATE TASK MODAL -->
+<div id="create-modal" class="modal" style="display:none">
+  <div class="modal-box">
+    <h3>Create New Task</h3>
+    <div class="form-group">
+      <label>Task Title</label>
+      <input type="text" id="task-title" placeholder="Enter task title" />
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="task-desc" placeholder="Describe the task"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Project</label>
+      <select id="task-project"></select>
+    </div>
+    <div class="form-group">
+      <label>Assign To</label>
+      <select id="task-assign"></select>
+    </div>
+    <div class="form-group">
+      <label>Priority</label>
+      <select id="task-priority">
+        <option value="low">Low</option>
+        <option value="medium" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Due Date</label>
+      <input type="date" id="task-due" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="createTask()">Create Task</button>
+      <button class="btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+    <div id="task-message" class="message" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+  const API_URL = 'http://localhost:5000/api';
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  if (!token) window.location.href = 'index.html';
+
+  document.getElementById('user-greeting').textContent = `Hello, ${user.name}!`;
+  const badge = document.getElementById('user-role-badge');
+  badge.textContent = user.role;
+  badge.className = `badge ${user.role}`;
+
+  if (user.role === 'admin') {
+    document.getElementById('create-task-btn').style.display = 'block';
+  }
+
+  let allTasks = [];
+
+  async function apiCall(url, method = 'GET', body = null) {
+    const options = {
+      method,
+      headers: { 'Authorization': token, 'Content-Type': 'application/json' }
+    };
+    if (body) options.body = JSON.stringify(body);
+    const res = await fetch(`${API_URL}${url}`, options);
+    return res.json();
+  }
+
+  // Load all tasks
+  async function loadTasks() {
+    allTasks = await apiCall('/tasks');
+    renderTasks(allTasks);
+  }
+
+  // Render tasks to table
+  function renderTasks(tasks) {
+    const tbody = document.getElementById('tasks-tbody');
+
+    if (!tasks.length) {
+      tbody.innerHTML = '<tr><td colspan="7">No tasks found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = tasks.map(task => {
+      const isOverdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done';
+      return `
+        <tr class="${isOverdue ? 'overdue-row' : ''}">
+          <td><strong>${task.title}</strong></td>
+          <td>${task.project_name || '-'}</td>
+          <td>${task.assigned_to_name || 'Unassigned'}</td>
+          <td><span class="priority-badge ${task.priority}">${task.priority}</span></td>
+          <td>
+            <select class="status-select" onchange="updateStatus(${task.id}, this.value)">
+              <option value="todo" ${task.status === 'todo' ? 'selected' : ''}>📌 To Do</option>
+              <option value="in_progress" ${task.status === 'in_progress' ? 'selected' : ''}>🔄 In Progress</option>
+              <option value="done" ${task.status === 'done' ? 'selected' : ''}>✅ Done</option>
+            </select>
+          </td>
+          <td class="${isOverdue ? 'overdue-text' : ''}">
+            ${task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}
+            ${isOverdue ? ' ⚠️' : ''}
+          </td>
+          <td>
+            ${user.role === 'admin' ? `
+              <button class="btn-small btn-danger" onclick="deleteTask(${task.id})">Delete</button>
+            ` : ''}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Filter tasks by status
+  function filterTasks() {
+    const status = document.getElementById('filter-status').value;
+    const filtered = status ? allTasks.filter(t => t.status === status) : allTasks;
+    renderTasks(filtered);
+  }
+
+  // Update a task's status
+  async function updateStatus(taskId, newStatus) {
+    const data = await apiCall(`/tasks/${taskId}/status`, 'PATCH', { status: newStatus });
+    if (!data.message) {
+      alert('Error updating status');
+    }
+    loadTasks(); // Reload
+  }
+
+  // Delete a task
+  async function deleteTask(id) {
+    if (!confirm('Delete this task?')) return;
+    await apiCall(`/tasks/${id}`, 'DELETE');
+    loadTasks();
+  }
+
+  // Load projects and users for the create task form
+  async function showCreateModal() {
+    const [projects, users] = await Promise.all([
+      apiCall('/projects'),
+      apiCall('/tasks/users/all')
+    ]);
+
+    const projectSelect = document.getElementById('task-project');
+    projectSelect.innerHTML = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+    const userSelect = document.getElementById('task-assign');
+    userSelect.innerHTML = '<option value="">Unassigned</option>' +
+      users.map(u => `<option value="${u.id}">${u.name} (${u.role})</option>`).join('');
+
+    document.getElementById('create-modal').style.display = 'flex';
+  }
+
+  // Create a task
+  async function createTask() {
+    const title = document.getElementById('task-title').value;
+    const description = document.getElementById('task-desc').value;
+    const project_id = document.getElementById('task-project').value;
+    const assigned_to = document.getElementById('task-assign').value || null;
+    const priority = document.getElementById('task-priority').value;
+    const due_date = document.getElementById('task-due').value || null;
+
+    if (!title) {
+      showMsg('Task title is required.', true);
+      return;
+    }
+
+    const data = await apiCall('/tasks', 'POST', { title, description, project_id, assigned_to, priority, due_date });
+
+    if (data.task) {
+      closeModal();
+      loadTasks();
+    } else {
+      showMsg(data.message, true);
+    }
+  }
+
+  function closeModal() {
+    document.getElementById('create-modal').style.display = 'none';
+  }
+
+  function showMsg(text, isError = false) {
+    const msg = document.getElementById('task-message');
+    msg.textContent = text;
+    msg.className = 'message ' + (isError ? 'error' : 'success');
+    msg.style.display = 'block';
+  }
+
+  function logout() {
+    localStorage.clear();
+    window.location.href = 'index.html';
+  }
+
+  loadTasks();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard - Task Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- NAVIGATION BAR -->
+<nav class="navbar">
+  <div class="nav-brand">📋 Task Manager</div>
+  <div class="nav-links">
+    <span id="user-greeting"></span>
+    <span id="user-role-badge" class="badge"></span>
+    <button class="btn-outline" onclick="window.location.href='projects.html'">Projects</button>
+    <button class="btn-outline" onclick="window.location.href='tasks.html'">Tasks</button>
+    <button class="btn-danger" onclick="logout()">Logout</button>
+  </div>
+</nav>
+
+<!-- DASHBOARD CONTENT -->
+<div class="container">
+  <h2>📊 Dashboard</h2>
+  <p>Welcome! Here's a summary of all tasks.</p>
+
+  <!-- STATS CARDS -->
+  <div class="stats-grid">
+    <div class="stat-card total">
+      <h3 id="total-tasks">...</h3>
+      <p>Total Tasks</p>
+    </div>
+    <div class="stat-card todo">
+      <h3 id="todo-count">...</h3>
+      <p>To Do</p>
+    </div>
+    <div class="stat-card progress">
+      <h3 id="progress-count">...</h3>
+      <p>In Progress</p>
+    </div>
+    <div class="stat-card done">
+      <h3 id="done-count">...</h3>
+      <p>Done ✅</p>
+    </div>
+    <div class="stat-card overdue">
+      <h3 id="overdue-count">...</h3>
+      <p>Overdue ⚠️</p>
+    </div>
+  </div>
+
+  <!-- RECENT TASKS TABLE -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Recent Tasks</h3>
+      <button class="btn-primary" onclick="window.location.href='tasks.html'">View All</button>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Task</th>
+          <th>Project</th>
+          <th>Assigned To</th>
+          <th>Status</th>
+          <th>Due Date</th>
+        </tr>
+      </thead>
+      <tbody id="recent-tasks">
+        <tr><td colspan="5">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const API_URL = 'http://localhost:5000/api';
+
+  // Check if user is logged in
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  if (!token) {
+    window.location.href = 'index.html';
+  }
+
+  // Show user's name and role
+  document.getElementById('user-greeting').textContent = `Hello, ${user.name}!`;
+  const badge = document.getElementById('user-role-badge');
+  badge.textContent = user.role;
+  badge.className = `badge ${user.role}`;
+
+  // Helper to make API calls with the token
+  async function apiCall(url) {
+    const res = await fetch(`${API_URL}${url}`, {
+      headers: { 'Authorization': token }
+    });
+    return res.json();
+  }
+
+  // Load dashboard stats
+  async function loadDashboard() {
+    try {
+      const stats = await apiCall('/tasks/dashboard');
+      document.getElementById('total-tasks').textContent = stats.total_tasks;
+      document.getElementById('todo-count').textContent = stats.todo_count;
+      document.getElementById('progress-count').textContent = stats.in_progress_count;
+      document.getElementById('done-count').textContent = stats.done_count;
+      document.getElementById('overdue-count').textContent = stats.overdue_count;
+    } catch (e) {
+      console.error('Error loading stats', e);
+    }
+  }
+
+  // Load recent tasks
+  async function loadRecentTasks() {
+    try {
+      const tasks = await apiCall('/tasks');
+      const tbody = document.getElementById('recent-tasks');
+      
+      if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">No tasks yet.</td></tr>';
+        return;
+      }
+
+      // Show only first 5 tasks
+      tbody.innerHTML = tasks.slice(0, 5).map(task => `
+        <tr>
+          <td><strong>${task.title}</strong></td>
+          <td>${task.project_name || '-'}</td>
+          <td>${task.assigned_to_name || 'Unassigned'}</td>
+          <td><span class="status-badge ${task.status}">${formatStatus(task.status)}</span></td>
+          <td>${task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}</td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      document.getElementById('recent-tasks').innerHTML = '<tr><td colspan="5">Error loading tasks.</td></tr>';
+    }
+  }
+
+  function formatStatus(status) {
+    const map = { todo: '📌 To Do', in_progress: '🔄 In Progress', done: '✅ Done' };
+    return map[status] || status;
+  }
+
+  function logout() {
+    localStorage.clear();
+    window.location.href = 'index.html';
+  }
+
+  // Load everything
+  loadDashboard();
+  loadRecentTasks();
+</script>
+
+</body>
+</html>

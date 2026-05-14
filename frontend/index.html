@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Team Task Manager - Login</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="auth-container">
+  <div class="auth-box">
+    <h1>📋 Task Manager</h1>
+    <p class="subtitle">Manage your team's work efficiently</p>
+
+    <!-- Tab buttons to switch between login and signup -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('login')">Login</button>
+      <button class="tab-btn" onclick="showTab('signup')">Sign Up</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="login-tab">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="Enter your email" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="Enter your password" />
+      </div>
+      <button class="btn-primary" onclick="login()">Login</button>
+    </div>
+
+    <!-- SIGNUP FORM -->
+    <div id="signup-tab" style="display:none">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="signup-name" placeholder="Enter your full name" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="signup-email" placeholder="Enter your email" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="signup-password" placeholder="Create a password" />
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="signup-role">
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="signup()">Create Account</button>
+    </div>
+
+    <!-- Error/Success message area -->
+    <div id="auth-message" class="message" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+  // API base URL - change this to your Railway backend URL when deployed
+  const API_URL = 'http://localhost:5000/api';
+
+  // Switch between Login and Signup tabs
+  function showTab(tab) {
+    document.getElementById('login-tab').style.display = tab === 'login' ? 'block' : 'none';
+    document.getElementById('signup-tab').style.display = tab === 'signup' ? 'block' : 'none';
+
+    document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'signup'));
+    });
+  }
+
+  // Show a message to the user
+  function showMessage(text, isError = false) {
+    const msg = document.getElementById('auth-message');
+    msg.textContent = text;
+    msg.className = 'message ' + (isError ? 'error' : 'success');
+    msg.style.display = 'block';
+  }
+
+  // LOGIN function
+  async function login() {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+
+    if (!email || !password) {
+      return showMessage('Please fill in all fields.', true);
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Save token and user info in browser
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        // Go to dashboard
+        window.location.href = 'dashboard.html';
+      } else {
+        showMessage(data.message, true);
+      }
+    } catch (err) {
+      showMessage('Cannot connect to server. Is the backend running?', true);
+    }
+  }
+
+  // SIGNUP function
+  async function signup() {
+    const name = document.getElementById('signup-name').value;
+    const email = document.getElementById('signup-email').value;
+    const password = document.getElementById('signup-password').value;
+    const role = document.getElementById('signup-role').value;
+
+    if (!name || !email || !password) {
+      return showMessage('Please fill in all fields.', true);
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, role })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.location.href = 'dashboard.html';
+      } else {
+        showMessage(data.message, true);
+      }
+    } catch (err) {
+      showMessage('Cannot connect to server. Is the backend running?', true);
+    }
+  }
+
+  // If already logged in, go to dashboard
+  if (localStorage.getItem('token')) {
+    window.location.href = 'dashboard.html';
+  }
+</script>
+
+</body>
+</html>
